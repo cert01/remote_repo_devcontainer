@@ -17,13 +17,14 @@ Docker can be the local Docker Desktop/Engine, or a remote engine, controlled
 by `DOCKER_HOST`.
 
 **This bootstrap is opened via "Dev Containers: Clone Repository in Named
-Container Volume", not "Reopen in Container".** That command clones this repo
-directly into a Docker volume on whichever daemon you're targeting, so the
-workspace and the container always live on the same machine - which is what
-makes this work identically for a local Docker Desktop/Engine and for a
-remote engine reached over `DOCKER_HOST`. Plain "Reopen in Container" bind-
-mounts your local checkout instead, which breaks the moment `DOCKER_HOST`
-points at a different machine (see Troubleshooting).
+Container Volume", not "Reopen in Container".**
+
+That command clones this repo directly into a Docker volume on whichever daemon
+you're targeting, so the workspace and the container always live on the same
+machine - which is what makes this work identically for a local Docker
+Desktop/Engine and for a remote engine reached over `DOCKER_HOST`. Plain
+"Reopen in Container" bind-mounts your local checkout instead, which breaks the
+moment `DOCKER_HOST` points at a different machine (see Troubleshooting).
 
 ## Prerequisites
 
@@ -65,9 +66,11 @@ points at a different machine (see Troubleshooting).
    in-container terminal, then `bash .devcontainer/scripts/post-create.sh`
    to retry the clone.
 5. Once cloned, bring up the project's supporting services:
-   ```
+
+   ```shell
    docker compose -f project/deployment/docker/docker-compose.yml up -d
    ```
+
    (adjust the path if you changed `COMPOSE_FILE_PATH`). Develop against
    `./project` directly in this container - Go/Java/Python/Node tooling and
    Claude Code are already installed.
@@ -111,7 +114,7 @@ inside the container) uses the same agent.
 
 ## Repo layout
 
-```
+```text
 .devcontainer/
   devcontainer.json        # the single devcontainer definition
   scripts/
