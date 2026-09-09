@@ -1,0 +1,59 @@
+{
+  "name": "v-bus-dev",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "upgradePackages": true
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "installDockerBuildx": true,
+      "dockerDashComposeVersion": "v2"
+    },
+    "ghcr.io/devcontainers/features/go:1": {},
+    "ghcr.io/devcontainers/features/java:1": {
+      "installMaven": true,
+      "installGradle": true
+    },
+    "ghcr.io/devcontainers/features/python:1": {},
+    "ghcr.io/devcontainers/features/node:1": {},
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1": {}
+  },
+
+  // GITHUB_REPO / PROJECT_DIR_NAME / COMPOSE_FILE_PATH / DOCKER_HOST must be real
+  // environment variables exported in your host shell profile (see README) - with
+  // "Clone Repository in Named Container Volume" there's no local checkout for a
+  // host-side script or .env file to read before the container exists.
+  "containerEnv": {
+    "GITHUB_REPO": "${localEnv:GITHUB_REPO}",
+    "PROJECT_DIR_NAME": "${localEnv:PROJECT_DIR_NAME}",
+    "COMPOSE_FILE_PATH": "${localEnv:COMPOSE_FILE_PATH}"
+  },
+  "remoteEnv": {
+    "DOCKER_HOST": "${localEnv:DOCKER_HOST}"
+  },
+
+  // Runs once inside the container after creation: GitHub auth + repo clone.
+  "postCreateCommand": "bash .devcontainer/scripts/post-create.sh",
+
+  // Runs every time the container starts: quick status/health check.
+  "postStartCommand": "bash .devcontainer/scripts/post-start.sh",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "redhat.java",
+        "ms-python.python",
+        "ms-azuretools.vscode-docker",
+        "anthropic.claude-code"
+      ],
+      "settings": {
+        // Hides GitHub Copilot Chat and other built-in AI chat affordances in
+        // this container's VS Code UI - Claude Code is the assistant here.
+        "chat.disableAIFeatures": true
+      }
+    }
+  }
+}
