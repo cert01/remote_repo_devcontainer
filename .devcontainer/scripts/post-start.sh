@@ -6,6 +6,8 @@ ROOT_DIR="$(pwd)"
 # shellcheck source=lib/common.sh
 source "$ROOT_DIR/.devcontainer/scripts/lib/common.sh"
 
+load_env
+
 PROJECT_DIR="$ROOT_DIR/${PROJECT_DIR_NAME:-project}"
 
 if ! gh auth status >/dev/null 2>&1; then

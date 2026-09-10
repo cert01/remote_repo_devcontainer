@@ -21,10 +21,13 @@
     "ghcr.io/anthropics/devcontainer-features/claude-code:1": {}
   },
 
-  // GITHUB_REPO / PROJECT_DIR_NAME / COMPOSE_FILE_PATH / DOCKER_HOST must be real
-  // environment variables exported in your host shell profile (see README) - with
-  // "Clone Repository in Named Container Volume" there's no local checkout for a
-  // host-side script or .env file to read before the container exists.
+  // GITHUB_REPO / PROJECT_DIR_NAME / COMPOSE_FILE_PATH / DOCKER_HOST are best set as
+  // real environment variables exported in your host shell profile (see README) -
+  // with "Clone Repository in Named Container Volume" there's no local checkout for
+  // a host-side script to read before the container exists, so ${localEnv:...} is
+  // the only way to get them in at build time. If any of the first three are left
+  // unset, postCreateCommand prompts for them and persists the answers to a
+  // gitignored .env in the workspace, so you're only asked once per volume.
   "containerEnv": {
     "GITHUB_REPO": "${localEnv:GITHUB_REPO}",
     "PROJECT_DIR_NAME": "${localEnv:PROJECT_DIR_NAME}",

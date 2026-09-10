@@ -6,6 +6,8 @@ ROOT_DIR="$(pwd)"
 # shellcheck source=lib/common.sh
 source "$ROOT_DIR/.devcontainer/scripts/lib/common.sh"
 
+ensure_env GITHUB_REPO PROJECT_DIR_NAME COMPOSE_FILE_PATH
+
 PROJECT_DIR="$ROOT_DIR/${PROJECT_DIR_NAME:-project}"
 COMPOSE_FILE_PATH="${COMPOSE_FILE_PATH:-deployment/docker/docker-compose.yml}"
 
@@ -20,8 +22,8 @@ if ! gh auth status >/dev/null 2>&1; then
 fi
 
 if [ -z "${GITHUB_REPO:-}" ]; then
-  warn "GITHUB_REPO is not set (expected form: org/repo, e.g. Versent/some-project)."
-  warn "Export it in your host shell profile (see README), rebuild the container, then re-run:"
+  warn "GITHUB_REPO is still not set - export it in your host shell profile or"
+  warn "re-run this script from an interactive terminal so it can prompt you:"
   warn "  bash .devcontainer/scripts/post-create.sh"
   exit 0
 fi

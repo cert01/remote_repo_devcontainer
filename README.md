@@ -43,9 +43,10 @@ moment `DOCKER_HOST` points at a different machine (see Troubleshooting).
 ## First-time setup
 
 1. Export the required environment variables in your **host** shell profile
-   (`~/.zshrc`, `~/.bashrc`, or the WSL equivalent) - there's no local
-   checkout for a `.env` file to live in, so these have to be real env vars
-   VS Code can read from your shell:
+   (`~/.zshrc`, `~/.bashrc`, or the WSL equivalent) - at container-creation
+   time there's no local checkout yet for a host-side script to read, so
+   `${localEnv:...}` needs these as real env vars VS Code can read from your
+   shell:
 
    ```bash
    export GITHUB_REPO=Versent/some-project      # required, org/repo
@@ -54,6 +55,11 @@ moment `DOCKER_HOST` points at a different machine (see Troubleshooting).
    ```
 
    Open a new shell (or restart VS Code) so the exports take effect.
+
+   If you skip this, `postCreateCommand` prompts for whichever of the three
+   are still unset the first time it runs inside the container, and saves
+   your answers to a gitignored `.env` in the workspace so you're only asked
+   once per container volume (see "Repo layout" below).
 2. If you're targeting a remote Docker engine, export `DOCKER_HOST` too and
    confirm it's reachable - see "Using a remote Docker instance" below.
 3. **Command Palette -> Dev Containers: Clone Repository in Named Container
@@ -120,14 +126,19 @@ inside the container) uses the same agent.
   scripts/
     post-create.sh          # in-container, once: gh auth + clone
     post-start.sh             # in-container, every start: status/health check
-    lib/common.sh              # shared log/warn/err helpers
+    lib/common.sh              # shared log/warn/err/env helpers
+.env                           # created on first run if needed - your answers (gitignored)
 project/                      # created on first run - the cloned private repo (gitignored)
 ```
 
 `GITHUB_REPO`, `PROJECT_DIR_NAME`, `COMPOSE_FILE_PATH` and `DOCKER_HOST` are
-passed into the container as real environment variables via `containerEnv`/
-`remoteEnv` in `devcontainer.json`, sourced from your host shell - there's no
-`.env` file in this setup any more.
+normally passed into the container as real environment variables via
+`containerEnv`/`remoteEnv` in `devcontainer.json`, sourced from your host
+shell. If the first three aren't set that way, `post-create.sh` prompts for
+them on first run and writes the answers to a gitignored `.env` in the
+workspace; `post-start.sh` sources that file on every start so you're only
+asked once per container volume. `DOCKER_HOST` has no such fallback - it must
+come from the host shell.
 
 ## Troubleshooting
 
