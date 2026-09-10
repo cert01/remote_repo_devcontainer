@@ -64,8 +64,12 @@ moment `DOCKER_HOST` points at a different machine (see Troubleshooting).
    confirm it's reachable - see "Using a remote Docker instance" below.
 3. **Command Palette -> Dev Containers: Clone Repository in Named Container
    Volume**, and give it this bootstrap repo's URL (add a branch/subfolder if
-   needed). VS Code clones it into a volume on the target daemon and builds
-   the container from its `.devcontainer/devcontainer.json`.
+   needed). When prompted for a volume, name it `remote_repo_devcontainer` -
+   there's no config for this (the volume has to exist before
+   `devcontainer.json` is read), so picking the same name each time is what
+   keeps it identifiable in `docker volume ls` alongside the container name
+   below. VS Code clones the repo into that volume and builds the container
+   from its `.devcontainer/devcontainer.json`.
 4. On first build, a terminal will prompt you to authenticate with GitHub:
    open the URL shown and enter the one-time code. If the prompt doesn't
    appear or the flow is interrupted, run `gh auth login` manually in an
@@ -131,44 +135,60 @@ has no credentials for, which fails with something like `Permission denied
 
 ## Resetting the remote Docker engine
 
-This wipes Docker state on whichever engine `DOCKER_HOST` (or the active
-`docker context`) currently points at - useful for clearing a disposable
-remote test host between runs. Run it from your **host** shell, not inside
-the container.
+This cleans up **this bootstrap's own** container and images on whichever
+engine `DOCKER_HOST` (or the active `docker context`) currently points at -
+useful between test cycles on a remote host. Run it from your **host**
+shell, not inside the container.
 
-It stops and removes every container, deletes every image, and prunes the
-full build cache on that engine. It does **not** touch volumes - your cloned
-workspace (the named container volume) is unaffected, so it's safe to run
-between test cycles without losing that checkout. Because it's scoped by
-whatever engine `DOCKER_HOST`/the active context currently resolves to, not
-by project, it will also remove anything else running on that engine - only
-run it against a host you know is dedicated to this kind of testing.
+It only ever touches things this bootstrap created, identified by name/
+reference rather than "everything currently running":
+
+- the `remote_repo_devcontainer` container (the fixed name set via `runArgs`
+  in `devcontainer.json` - see above)
+- images whose reference starts with `vsc-remote_repo_devcontainer` (the
+  built devcontainer image) or `vsc-volume-bootstrap` (VS Code's own,
+  temporary clone-into-volume helper image)
+- the build cache
+
+It does **not** touch volumes or anything else on the engine - other
+containers/images on a shared host, and your cloned workspace (the named
+container volume), are left alone.
 
 ```bash
 #!/usr/bin/env bash
-# reset-remote-docker.sh - stop/remove all containers, images, and build
-# cache on the Docker engine DOCKER_HOST (or the active context) points at.
+# reset-remote-docker.sh - stop/remove this bootstrap's devcontainer
+# container and images, and prune the build cache, on the Docker engine
+# DOCKER_HOST (or the active context) points at. Scoped by name/reference -
+# it does not touch anything else on the engine, or any volumes.
 set -euo pipefail
+
+CONTAINER_NAME="remote_repo_devcontainer"
+IMAGE_REFERENCES=("vsc-remote_repo_devcontainer*" "vsc-volume-bootstrap*")
 
 target="${DOCKER_HOST:-$(docker context inspect -f '{{.Endpoints.docker.Host}}' 2>/dev/null || echo 'default local context')}"
 
-echo "This will stop/remove ALL containers, ALL images, and the full build cache on:"
+echo "This will stop/remove the '$CONTAINER_NAME' container, images matching"
+echo "${IMAGE_REFERENCES[*]}, and prune the build cache on:"
 echo "  $target"
 read -r -p "Type 'yes' to continue: " confirm
 [ "$confirm" = "yes" ] || { echo "Aborted."; exit 1; }
 
-mapfile -t containers < <(docker ps -aq)
-if [ "${#containers[@]}" -gt 0 ]; then
-  echo "Stopping and removing ${#containers[@]} container(s)..."
-  docker stop "${containers[@]}"
-  docker rm "${containers[@]}"
+if docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
+  echo "Stopping and removing container $CONTAINER_NAME..."
+  docker rm -f "$CONTAINER_NAME"
+else
+  echo "No container named $CONTAINER_NAME found - skipping."
 fi
 
-mapfile -t images < <(docker images -aq)
-if [ "${#images[@]}" -gt 0 ]; then
-  echo "Removing ${#images[@]} image(s)..."
-  docker rmi -f "${images[@]}"
-fi
+for ref in "${IMAGE_REFERENCES[@]}"; do
+  mapfile -t ids < <(docker images -q --filter "reference=${ref}" | sort -u)
+  if [ "${#ids[@]}" -gt 0 ]; then
+    echo "Removing ${#ids[@]} image(s) matching ${ref}..."
+    docker rmi -f "${ids[@]}"
+  else
+    echo "No images matching ${ref} found - skipping."
+  fi
+done
 
 echo "Pruning build cache..."
 docker builder prune -af
@@ -178,7 +198,8 @@ docker system df
 ```
 
 Save it as e.g. `reset-remote-docker.sh`, `chmod +x` it, confirm `DOCKER_HOST`
-(or `docker context ls`) is pointed at the right engine, then run it.
+(or `docker context ls`) is pointed at the right engine, then run it. If you
+rename the container in `runArgs`, update `CONTAINER_NAME` here to match.
 
 ## Repo layout
 
@@ -247,3 +268,10 @@ fallback and no in-container prompt.
   including a running Claude Code CLI session, are closed with it, not
   moved into the container. Finish or save that work first, and start
   Claude Code fresh once you're inside the container if you need it there.
+- **Container creation fails with `Conflict. The container name
+  "/remote_repo_devcontainer" is already in use`**: a container from a
+  previous run is still sitting on the target engine (common after an
+  interrupted build, or when re-cloning into a fresh volume without
+  cleaning up the old container first). Run the reset script in "Resetting
+  the remote Docker engine" above, or manually `docker rm -f
+  remote_repo_devcontainer` against that engine, then retry.

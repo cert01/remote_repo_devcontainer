@@ -2,6 +2,17 @@
   "name": "v-bus-dev",
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
 
+  // Fixed name + label so this container is easy to find and clean up on a
+  // shared/remote engine (docker ps, docker inspect, or the reset script in
+  // the README) instead of relying on VS Code's auto-generated name. Rebuild
+  // will fail with "name already in use" if a stale container with this name
+  // is left over from a previous run - remove it (or run the reset script)
+  // first.
+  "runArgs": [
+    "--name", "remote_repo_devcontainer",
+    "--label", "com.versent.devcontainer=remote_repo_devcontainer"
+  ],
+
   "features": {
     "ghcr.io/devcontainers/features/common-utils:2": {
       "upgradePackages": true
