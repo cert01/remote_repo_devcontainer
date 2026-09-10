@@ -65,12 +65,22 @@ moment `DOCKER_HOST` points at a different machine (see Troubleshooting).
    confirm it's reachable - see "Using a remote Docker instance" below.
 3. **Command Palette -> Dev Containers: Clone Repository in Named Container
    Volume**, and give it this bootstrap repo's URL (add a branch/subfolder if
-   needed). When prompted for a volume, name it `remote_repo_devcontainer` -
-   there's no config for this (the volume has to exist before
-   `devcontainer.json` is read), so picking the same name each time is what
-   keeps it identifiable in `docker volume ls` alongside the container name
-   below. VS Code clones the repo into that volume and builds the container
-   from its `.devcontainer/devcontainer.json`.
+   needed). You'll then be prompted for two separate things - there's no
+   devcontainer.json config for either of these (the volume has to exist
+   before `devcontainer.json` is read):
+   - **"Enter the volume name"**: type `remote_repo_devcontainer`, replacing
+     the generic `vsc-remote-containers` VS Code suggests by default. That
+     default isn't project-specific - accepting it would have every project
+     you clone this way share the same volume. Using
+     `remote_repo_devcontainer` here is what makes `docker volume ls` show it
+     next to the container name (see `runArgs` above) and what the reset
+     script's `VOLUME_NAMES` (below) expects.
+   - **"Enter the target folder name"**: accept the suggested default
+     (`remote_repo_devcontainer`, matching the repo name) - this is just
+     where inside the volume the repo lands, it doesn't need to be unique.
+
+   VS Code clones the repo into that volume and builds the container from
+   its `.devcontainer/devcontainer.json`.
 4. On first build, a terminal will prompt you to authenticate with GitHub:
    open the URL shown and enter the one-time code. If the prompt doesn't
    appear or the flow is interrupted, run `gh auth login` manually in an
