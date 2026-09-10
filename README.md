@@ -154,6 +154,14 @@ It does **not** touch volumes or anything else on the engine - other
 containers/images on a shared host, and your cloned workspace (the named
 container volume), are left alone.
 
+**Close the VS Code window connected to this container first** (Dev
+Containers: Close Remote Connection, or just quit that window). The
+container is force-removed by name, so if VS Code (or anything else) is
+still attached to it when the script runs, that session is killed outright -
+a hard disconnect (`docker rm -f` sends `SIGKILL`), not a clean shutdown. The
+script will ask you to confirm twice if it finds the container still
+running, but it's safer to just disconnect first.
+
 ```bash
 #!/usr/bin/env bash
 # reset-remote-docker.sh - stop/remove this bootstrap's devcontainer
@@ -178,11 +186,26 @@ echo " $target"
 read -r -p "Type 'yes' to continue: " confirm
 [ "$confirm" = "yes" ] || { echo "Aborted."; exit 1; }
 
+skip_container_removal=0
 if docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
+  running="$(docker inspect --format '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null || echo false)"
+  if [ "$running" = "true" ]; then
+    echo
+    echo "WARNING: $CONTAINER_NAME is currently RUNNING. If VS Code (or anything"
+    echo "else) is connected to it right now, force-removing it kills that"
+    echo "session immediately - a hard disconnect, not a clean shutdown."
+    read -r -p "Type 'yes' again to force-remove it anyway: " confirm_running
+    [ "$confirm_running" = "yes" ] || skip_container_removal=1
+  fi
+else
+  skip_container_removal=1
+fi
+
+if [ "$skip_container_removal" -eq 0 ]; then
   echo "Stopping and removing container $CONTAINER_NAME..."
   docker container rm --force --volumes "$CONTAINER_NAME"
 else
-  echo "No container named $CONTAINER_NAME found - skipping."
+  echo "Skipping container removal ($CONTAINER_NAME not found, or you chose to keep it running)."
 fi
 
 for ref in "${IMAGE_REFERENCES[@]}"; do
