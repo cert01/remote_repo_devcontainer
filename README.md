@@ -221,6 +221,15 @@ for ref in "${IMAGE_REFERENCES[@]}"; do
   fi
 done
 
+for vol in vsc-remote-containers vscode; do
+  if [ -n "$(docker volume ls --filter "name=$vol" --quiet)" ]; then
+    echo "Removing volume(s) matching $vol..."
+    docker volume rm "$(docker volume ls --filter "name=$vol" --quiet)"
+  else
+    echo "No volumes matching $vol found - skipping."
+  fi
+done
+
 docker system df --verbose
 
 echo "Pruning build cache..."
