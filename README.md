@@ -150,9 +150,13 @@ reference rather than "everything currently running":
   temporary clone-into-volume helper image)
 - the build cache
 
-It does **not** touch volumes or anything else on the engine - other
-containers/images on a shared host, and your cloned workspace (the named
-container volume), are left alone.
+By default it does **not** touch volumes or anything else on the engine -
+other containers/images on a shared host are left alone. It can optionally
+also remove the workspace volume itself (see below), scoped to the exact
+volume name from setup (`remote_repo_devcontainer`) and gated behind its own
+separate confirmation, since that step is destructive in a way the rest of
+the script isn't: it deletes your actual cloned repo and the gitignored
+`.env`, not a disposable container/image.
 
 **Close the VS Code window connected to this container first** (Dev
 Containers: Close Remote Connection, or just quit that window). The
@@ -221,14 +225,26 @@ for ref in "${IMAGE_REFERENCES[@]}"; do
   fi
 done
 
-for vol in vsc-remote-containers vscode; do
-  if [ -n "$(docker volume ls --filter "name=$vol" --quiet)" ]; then
-    echo "Removing volume(s) matching $vol..."
-    docker volume rm "$(docker volume ls --filter "name=$vol" --quiet)"
-  else
-    echo "No volumes matching $vol found - skipping."
-  fi
-done
+VOLUME_NAMES=("remote_repo_devcontainer")
+
+echo
+echo "WARNING: removing the workspace volume deletes the actual cloned repo"
+echo "(everything under ./project) and the gitignored .env permanently - this"
+echo "is not like removing the container/images above, which just get"
+echo "rebuilt. Make sure anything you need is pushed/committed first."
+read -r -p "Type 'yes' to also remove the workspace volume(s) (${VOLUME_NAMES[*]}): " confirm_volume
+if [ "$confirm_volume" = "yes" ]; then
+  for vol in "${VOLUME_NAMES[@]}"; do
+    if docker volume inspect "$vol" >/dev/null 2>&1; then
+      echo "Removing volume $vol..."
+      docker volume rm "$vol"
+    else
+      echo "No volume named $vol found - skipping."
+    fi
+  done
+else
+  echo "Leaving workspace volume(s) in place."
+fi
 
 docker system df --verbose
 
