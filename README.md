@@ -198,8 +198,10 @@ for ref in "${IMAGE_REFERENCES[@]}"; do
   fi
 done
 
+docker system df --verbose
+
 echo "Pruning build cache..."
-docker builder prune -af
+docker builder prune --all --force
 
 echo "Done. Remaining disk usage on $target:"
 docker system df
