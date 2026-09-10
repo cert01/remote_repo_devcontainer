@@ -167,24 +167,32 @@ IMAGE_REFERENCES=("vsc-remote_repo_devcontainer*" "vsc-volume-bootstrap*")
 
 target="${DOCKER_HOST:-$(docker context inspect -f '{{.Endpoints.docker.Host}}' 2>/dev/null || echo 'default local context')}"
 
+[[ ! "$(docker container ps --format "{{.Names}}" | grep "${CONTAINER_NAME}")" == "$CONTAINER_NAME" ]] && echo "No container named $CONTAINER_NAME found." || echo "Container named $CONTAINER_NAME found."
+for ref in "${IMAGE_REFERENCES[@]}"; do
+  [[ ! "$(docker image ls --format "{{.Repository}}" | grep "$ref")" ]] && echo "No images matching $ref found." || echo "Images matching $ref found."
+done
+
 echo "This will stop/remove the '$CONTAINER_NAME' container, images matching"
-echo "${IMAGE_REFERENCES[*]}, and prune the build cache on:"
-echo "  $target"
+echo -n "${IMAGE_REFERENCES[*]}, and prune the build cache on:"
+echo " $target"
 read -r -p "Type 'yes' to continue: " confirm
 [ "$confirm" = "yes" ] || { echo "Aborted."; exit 1; }
 
 if docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
   echo "Stopping and removing container $CONTAINER_NAME..."
-  docker rm -f "$CONTAINER_NAME"
+  docker container rm --force --volumes "$CONTAINER_NAME"
 else
   echo "No container named $CONTAINER_NAME found - skipping."
 fi
 
 for ref in "${IMAGE_REFERENCES[@]}"; do
-  mapfile -t ids < <(docker images -q --filter "reference=${ref}" | sort -u)
+  ids=()
+  while IFS= read -r id; do
+    [ -n "$id" ] && ids+=("$id")
+  done < <(docker images --quiet --filter "reference=${ref}" | sort -u)
   if [ "${#ids[@]}" -gt 0 ]; then
     echo "Removing ${#ids[@]} image(s) matching ${ref}..."
-    docker rmi -f "${ids[@]}"
+    docker image rm --force "${ids[@]}"
   else
     echo "No images matching ${ref} found - skipping."
   fi
