@@ -42,11 +42,12 @@ moment `DOCKER_HOST` points at a different machine (see Troubleshooting).
 
 ## First-time setup
 
-1. Export the required environment variables in your **host** shell profile
-   (`~/.zshrc`, `~/.bashrc`, or the WSL equivalent) - at container-creation
-   time there's no local checkout yet for a host-side script to read, so
-   `${localEnv:...}` needs these as real env vars VS Code can read from your
-   shell:
+1. Export the required environment variables in your **local** shell profile
+   (`~/.zshrc`, `~/.bashrc`, or the WSL equivalent) - on the machine running
+   VS Code, not on a remote engine even if you're targeting one. At
+   container-creation time there's no local checkout yet for a script to
+   read, so `${localEnv:...}` needs these as real env vars VS Code can read
+   from your shell:
 
    ```bash
    export GITHUB_REPO=Versent/some-project      # required, org/repo
@@ -92,9 +93,9 @@ if you ever need out-of-band access).
 
 ## Using a remote Docker instance instead of local
 
-`DOCKER_HOST` is a **host-only** variable - it only needs to be visible to VS
-Code itself (which drives the clone-in-volume and the build), never inside
-the container:
+`DOCKER_HOST` is a **local-only** variable - it only needs to be visible to
+VS Code itself, on your local machine (which drives the clone-in-volume and
+the build), never inside the container:
 
 ```bash
 # in your shell profile (~/.zshrc, ~/.bashrc, or the WSL equivalent)
@@ -113,7 +114,7 @@ docker context use remote
 ```
 
 Whichever engine is active when you run the clone-in-volume command is where
-the volume and the container end up - there's no separate host/remote split
+the volume and the container end up - there's no separate local/remote split
 to worry about beyond that, because the workspace is never bind-mounted from
 your Mac/PC in the first place.
 
@@ -137,7 +138,7 @@ has no credentials for, which fails with something like `Permission denied
 
 This cleans up **this bootstrap's own** container and images on whichever
 engine `DOCKER_HOST` (or the active `docker context`) currently points at -
-useful between test cycles on a remote host. Run it from your **host**
+useful between test cycles on a remote engine. Run it from your **local**
 shell, not inside the container.
 
 It only ever touches things this bootstrap created, identified by name/
@@ -151,7 +152,7 @@ reference rather than "everything currently running":
 - the build cache
 
 By default it does **not** touch volumes or anything else on the engine -
-other containers/images on a shared host are left alone. It can optionally
+other containers/images on a shared engine are left alone. It can optionally
 also remove the workspace volume itself (see below), scoped to the exact
 volume name from setup (`remote_repo_devcontainer`) and gated behind its own
 separate confirmation, since that step is destructive in a way the rest of
@@ -274,11 +275,11 @@ project/                      # created on first run - the cloned private repo (
 
 `GITHUB_REPO`, `PROJECT_DIR_NAME` and `COMPOSE_FILE_PATH` are normally passed
 into the container as real environment variables via `containerEnv` in
-`devcontainer.json`, sourced from your host shell. If they aren't set that
+`devcontainer.json`, sourced from your local shell. If they aren't set that
 way, `post-create.sh` prompts for them on first run and writes the answers to
 a gitignored `.env` in the workspace; `post-start.sh` sources that file on
 every start so you're only asked once per container volume. `DOCKER_HOST` is
-different: it's a host-only variable (see "Using a remote Docker instance"
+different: it's a local-only variable (see "Using a remote Docker instance"
 above) that's never passed into the container at all, so it has no `.env`
 fallback and no in-container prompt.
 
@@ -298,15 +299,16 @@ fallback and no in-container prompt.
   account actually has access to `GITHUB_REPO`, and that the exported value
   is exactly `org/repo`.
 - **`GITHUB_REPO`/etc. show up empty inside the container**: these are only
-  picked up from your **host** shell profile at container-creation time via
+  picked up from your **local** shell profile at container-creation time via
   `${localEnv:...}` - confirm they're exported before VS Code starts the
   clone/build, then rebuild the container (Dev Containers: Rebuild Container)
   after changing them.
 - **Docker unreachable**: check `docker info` inside the container. For local
   Docker, confirm Docker Desktop/Engine is running. For remote, confirm
-  `DOCKER_HOST` was exported on the host (and the shell restarted) *before*
-  the container was created, and that the remote engine is reachable
-  (VPN/network/firewall) - see "Using a remote Docker instance" above.
+  `DOCKER_HOST` was exported on your local machine (and the shell restarted)
+  *before* the container was created, and that the remote engine is
+  reachable (VPN/network/firewall) - see "Using a remote Docker instance"
+  above.
 - **`docker compose` inside the container fails with `error during connect:
   ... command [ssh ... dial-stdio] has exited with exit status 255`, ending in
   `Permission denied (publickey,password)`**: something is exporting
@@ -316,8 +318,8 @@ fallback and no in-container prompt.
   SSH connection back out to the remote engine instead of using the
   bind-mounted `docker.sock` that `docker-outside-of-docker` already wired up,
   and the container has no SSH key for that hop. Remove `DOCKER_HOST` from
-  the container's environment - it belongs on the host only (see "Using a
-  remote Docker instance" above).
+  the container's environment - it belongs on your local machine only (see
+  "Using a remote Docker instance" above).
 - **Switching an existing window into the container closes your local VS
   Code session**: selecting a Dev Containers command that reopens the
   current window inside the volume (e.g. "Reopen in Named Volume
