@@ -41,8 +41,3 @@ git config --global --add safe.directory "$PROJECT_DIR"
 log "Done."
 log "Supporting services are defined in $PROJECT_DIR/$COMPOSE_FILE_PATH"
 log "Bring them up with: docker compose -f $PROJECT_DIR/$COMPOSE_FILE_PATH up -d"
-if [ -n "${DOCKER_HOST:-}" ]; then
-  log "DOCKER_HOST=$DOCKER_HOST - compose will target that remote engine."
-else
-  log "No DOCKER_HOST set - compose will target the local Docker socket."
-fi

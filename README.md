@@ -88,9 +88,9 @@ if you ever need out-of-band access).
 
 ## Using a remote Docker instance instead of local
 
-`DOCKER_HOST` needs to be visible both to VS Code itself (which drives the
-clone-in-volume and the build) and to the Docker CLI inside the container, so
-it must be a real environment variable on the host:
+`DOCKER_HOST` is a **host-only** variable - it only needs to be visible to VS
+Code itself (which drives the clone-in-volume and the build), never inside
+the container:
 
 ```bash
 # in your shell profile (~/.zshrc, ~/.bashrc, or the WSL equivalent)
@@ -115,8 +115,70 @@ your Mac/PC in the first place.
 
 If your remote engine is reached over SSH and needs key-based auth, make sure
 your SSH agent is running and has the key loaded (`ssh-add -l`) before opening
-VS Code - the Docker CLI (both on the host and, via docker-outside-of-docker,
-inside the container) uses the same agent.
+VS Code - that's what lets VS Code's own Docker CLI create the volume and
+container on the remote engine in the first place.
+
+`devcontainer.json` deliberately does **not** forward `DOCKER_HOST` into the
+container. `docker-outside-of-docker` bind-mounts `docker.sock` from whichever
+engine actually creates the container - local or remote - so the in-container
+`docker`/`docker compose` CLI already talks to the right daemon with no
+further config, and the feature's own entrypoint handles the socket
+permissions for you. If `DOCKER_HOST` were also set inside the container, the
+CLI there would ignore that working local socket and instead try to open a
+*new* SSH/TCP connection back out to the remote engine - a hop the container
+has no credentials for, which fails with something like `Permission denied
+(publickey,password)` (see Troubleshooting).
+
+## Resetting the remote Docker engine
+
+This wipes Docker state on whichever engine `DOCKER_HOST` (or the active
+`docker context`) currently points at - useful for clearing a disposable
+remote test host between runs. Run it from your **host** shell, not inside
+the container.
+
+It stops and removes every container, deletes every image, and prunes the
+full build cache on that engine. It does **not** touch volumes - your cloned
+workspace (the named container volume) is unaffected, so it's safe to run
+between test cycles without losing that checkout. Because it's scoped by
+whatever engine `DOCKER_HOST`/the active context currently resolves to, not
+by project, it will also remove anything else running on that engine - only
+run it against a host you know is dedicated to this kind of testing.
+
+```bash
+#!/usr/bin/env bash
+# reset-remote-docker.sh - stop/remove all containers, images, and build
+# cache on the Docker engine DOCKER_HOST (or the active context) points at.
+set -euo pipefail
+
+target="${DOCKER_HOST:-$(docker context inspect -f '{{.Endpoints.docker.Host}}' 2>/dev/null || echo 'default local context')}"
+
+echo "This will stop/remove ALL containers, ALL images, and the full build cache on:"
+echo "  $target"
+read -r -p "Type 'yes' to continue: " confirm
+[ "$confirm" = "yes" ] || { echo "Aborted."; exit 1; }
+
+mapfile -t containers < <(docker ps -aq)
+if [ "${#containers[@]}" -gt 0 ]; then
+  echo "Stopping and removing ${#containers[@]} container(s)..."
+  docker stop "${containers[@]}"
+  docker rm "${containers[@]}"
+fi
+
+mapfile -t images < <(docker images -aq)
+if [ "${#images[@]}" -gt 0 ]; then
+  echo "Removing ${#images[@]} image(s)..."
+  docker rmi -f "${images[@]}"
+fi
+
+echo "Pruning build cache..."
+docker builder prune -af
+
+echo "Done. Remaining disk usage on $target:"
+docker system df
+```
+
+Save it as e.g. `reset-remote-docker.sh`, `chmod +x` it, confirm `DOCKER_HOST`
+(or `docker context ls`) is pointed at the right engine, then run it.
 
 ## Repo layout
 
@@ -131,14 +193,15 @@ inside the container) uses the same agent.
 project/                      # created on first run - the cloned private repo (gitignored)
 ```
 
-`GITHUB_REPO`, `PROJECT_DIR_NAME`, `COMPOSE_FILE_PATH` and `DOCKER_HOST` are
-normally passed into the container as real environment variables via
-`containerEnv`/`remoteEnv` in `devcontainer.json`, sourced from your host
-shell. If the first three aren't set that way, `post-create.sh` prompts for
-them on first run and writes the answers to a gitignored `.env` in the
-workspace; `post-start.sh` sources that file on every start so you're only
-asked once per container volume. `DOCKER_HOST` has no such fallback - it must
-come from the host shell.
+`GITHUB_REPO`, `PROJECT_DIR_NAME` and `COMPOSE_FILE_PATH` are normally passed
+into the container as real environment variables via `containerEnv` in
+`devcontainer.json`, sourced from your host shell. If they aren't set that
+way, `post-create.sh` prompts for them on first run and writes the answers to
+a gitignored `.env` in the workspace; `post-start.sh` sources that file on
+every start so you're only asked once per container volume. `DOCKER_HOST` is
+different: it's a host-only variable (see "Using a remote Docker instance"
+above) that's never passed into the container at all, so it has no `.env`
+fallback and no in-container prompt.
 
 ## Troubleshooting
 
@@ -162,5 +225,25 @@ come from the host shell.
   after changing them.
 - **Docker unreachable**: check `docker info` inside the container. For local
   Docker, confirm Docker Desktop/Engine is running. For remote, confirm
-  `DOCKER_HOST` is exported on the host, the shell was restarted after
-  exporting it, and the remote engine is reachable (VPN/network/firewall).
+  `DOCKER_HOST` was exported on the host (and the shell restarted) *before*
+  the container was created, and that the remote engine is reachable
+  (VPN/network/firewall) - see "Using a remote Docker instance" above.
+- **`docker compose` inside the container fails with `error during connect:
+  ... command [ssh ... dial-stdio] has exited with exit status 255`, ending in
+  `Permission denied (publickey,password)`**: something is exporting
+  `DOCKER_HOST` inside the container itself (e.g. it got added back to
+  `remoteEnv` in `devcontainer.json`, or set in a shell profile inside the
+  container/volume). That makes the in-container Docker CLI try to open a new
+  SSH connection back out to the remote engine instead of using the
+  bind-mounted `docker.sock` that `docker-outside-of-docker` already wired up,
+  and the container has no SSH key for that hop. Remove `DOCKER_HOST` from
+  the container's environment - it belongs on the host only (see "Using a
+  remote Docker instance" above).
+- **Switching an existing window into the container closes your local VS
+  Code session**: selecting a Dev Containers command that reopens the
+  current window inside the volume (e.g. "Reopen in Named Volume
+  Container") replaces that window in place - it doesn't open a second one.
+  Any local terminals or extension sessions attached to that window,
+  including a running Claude Code CLI session, are closed with it, not
+  moved into the container. Finish or save that work first, and start
+  Claude Code fresh once you're inside the container if you need it there.

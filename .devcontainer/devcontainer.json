@@ -21,21 +21,28 @@
     "ghcr.io/anthropics/devcontainer-features/claude-code:1": {}
   },
 
-  // GITHUB_REPO / PROJECT_DIR_NAME / COMPOSE_FILE_PATH / DOCKER_HOST are best set as
-  // real environment variables exported in your host shell profile (see README) -
+  // GITHUB_REPO / PROJECT_DIR_NAME / COMPOSE_FILE_PATH are best set as real
+  // environment variables exported in your host shell profile (see README) -
   // with "Clone Repository in Named Container Volume" there's no local checkout for
   // a host-side script to read before the container exists, so ${localEnv:...} is
-  // the only way to get them in at build time. If any of the first three are left
-  // unset, postCreateCommand prompts for them and persists the answers to a
+  // the only way to get them in at build time. If any are left unset,
+  // postCreateCommand prompts for them and persists the answers to a
   // gitignored .env in the workspace, so you're only asked once per volume.
   "containerEnv": {
     "GITHUB_REPO": "${localEnv:GITHUB_REPO}",
     "PROJECT_DIR_NAME": "${localEnv:PROJECT_DIR_NAME}",
     "COMPOSE_FILE_PATH": "${localEnv:COMPOSE_FILE_PATH}"
   },
-  "remoteEnv": {
-    "DOCKER_HOST": "${localEnv:DOCKER_HOST}"
-  },
+
+  // DOCKER_HOST is deliberately NOT forwarded into the container. It's a
+  // host-only variable that tells VS Code/the local docker CLI which engine
+  // to create this container on. docker-outside-of-docker then bind-mounts
+  // that same engine's docker.sock into the container, so the in-container
+  // docker CLI already reaches the right daemon - local or remote - with no
+  // extra config. Setting DOCKER_HOST inside the container instead makes it
+  // try to open a *new* connection back out over ssh/tcp, which fails
+  // (typically "Permission denied (publickey,password)") because the
+  // container has no credentials for that hop. See README.
 
   // Runs once inside the container after creation: GitHub auth + repo clone.
   "postCreateCommand": "bash .devcontainer/scripts/post-create.sh",

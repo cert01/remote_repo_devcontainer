@@ -17,11 +17,7 @@ elif [ ! -d "$PROJECT_DIR/.git" ]; then
 fi
 
 if docker info >/dev/null 2>&1; then
-  if [ -n "${DOCKER_HOST:-}" ]; then
-    log "Docker reachable at $DOCKER_HOST."
-  else
-    log "Docker reachable (local socket)."
-  fi
+  log "Docker reachable (via the bind-mounted docker.sock)."
 else
-  warn "Cannot reach the Docker daemon - check DOCKER_HOST, Docker Desktop, or the remote engine."
+  warn "Cannot reach the Docker daemon - check Docker Desktop or the remote engine this container was created on."
 fi
